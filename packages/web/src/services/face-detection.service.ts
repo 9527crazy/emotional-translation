@@ -50,7 +50,7 @@ export class FaceDetectionService {
       }
 
       const landmarks = results.faceLandmarks[0];
-      const blendshapes: Blendshape[] = results.faceBlendmarks?.[0]?.categories?.map(
+      const blendshapes: Blendshape[] = results.faceBlendshapes?.[0]?.categories?.map(
         (cat: any) => ({
           categoryName: cat.categoryName,
           score: cat.score,

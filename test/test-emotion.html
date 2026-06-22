@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Emotion Detection Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'SF Mono', 'Menlo', monospace; background: #1a1a2e; color: #eee; padding: 20px; }
+    h1 { color: #e94560; margin-bottom: 20px; }
+    .controls { margin-bottom: 20px; }
+    button { background: #0f3460; color: #eee; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-right: 8px; }
+    button:hover { background: #16213e; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .gallery { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; }
+    .card { background: #16213e; border-radius: 12px; padding: 16px; width: 300px; }
+    .card img { width: 100%; border-radius: 8px; margin-bottom: 12px; }
+    .card h3 { color: #e94560; margin-bottom: 8px; font-size: 14px; }
+    .card .result { font-size: 12px; line-height: 1.6; }
+    .card .result .dominant { font-size: 16px; font-weight: bold; color: #00d2ff; }
+    .blendshapes { background: #0a0a1a; padding: 12px; border-radius: 8px; margin-top: 8px; max-height: 200px; overflow-y: auto; font-size: 11px; }
+    .blendshapes .row { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px solid #1a1a2e; }
+    .blendshapes .row .val { color: #00d2ff; }
+    .status { padding: 12px; background: #16213e; border-radius: 8px; margin-bottom: 16px; }
+    .status.success { border-left: 4px solid #0f0; }
+    .status.error { border-left: 4px solid #f00; }
+    .status.loading { border-left: 4px solid #ff0; }
+    #log { background: #0a0a1a; padding: 12px; border-radius: 8px; margin-top: 20px; max-height: 300px; overflow-y: auto; font-size: 12px; white-space: pre-wrap; }
+    .score-bar { display: inline-block; height: 10px; background: #00d2ff; border-radius: 2px; margin-left: 4px; vertical-align: middle; }
+  </style>
+</head>
+<body>
+  <h1>🎭 Emotion Detection Test</h1>
+
+  <div class="controls">
+    <button id="btnInit" onclick="initModel()">1. Init MediaPipe</button>
+    <button id="btnTest" onclick="runAllTests()" disabled>2. Run Image Tests</button>
+    <button id="btnCamera" onclick="testCamera()" disabled>3. Test Camera</button>
+  </div>
+
+  <div id="status" class="status">Click "Init MediaPipe" to start</div>
+  <div id="gallery" class="gallery"></div>
+  <div id="log"></div>
+
+  <script type="module">
+    import { FaceLandmarker, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/+esm';
+
+    const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm';
+    const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+
+    // Test images with expected emotions
+    const TEST_IMAGES = [
+      { name: 'Happy (smile)', url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400', expected: 'happy' },
+      { name: 'Sad', url: 'https://images.unsplash.com/photo-1516589091380-5d8e87df6999?w=400', expected: 'sad' },
+      { name: 'Surprised', url: 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=400', expected: 'surprised' },
+      { name: 'Angry', url: 'https://images.unsplash.com/photo-1594744803329-e58b31de8bf5?w=400', expected: 'angry' },
+    ];
+
+    // Emotion blendshape weights (same as emotion.service.ts)
+    const WEIGHTS = {
+      'mouthSmileLeft':    { happy: 0.9 },
+      'mouthSmileRight':   { happy: 0.9 },
+      'mouthFrownLeft':    { sad: 0.6 },
+      'mouthFrownRight':   { sad: 0.6 },
+      'mouthOpen':         { surprised: 0.4, fearful: 0.2 },
+      'mouthPucker':       { disgusted: 0.4 },
+      'mouthDimpleLeft':   { happy: 0.3 },
+      'mouthDimpleRight':  { happy: 0.3 },
+      'mouthPressLeft':    { angry: 0.3 },
+      'mouthPressRight':   { angry: 0.3 },
+      'mouthShrugLower':   { disgusted: 0.4 },
+      'mouthFunnel':       { surprised: 0.3 },
+      'mouthStretchLeft':  { fearful: 0.2, surprised: 0.1 },
+      'mouthStretchRight': { fearful: 0.2, surprised: 0.1 },
+      'browInnerUp':       { surprised: 0.5, fearful: 0.3 },
+      'browDownLeft':      { angry: 0.5, fearful: 0.2 },
+      'browDownRight':     { angry: 0.5, fearful: 0.2 },
+      'browOuterUpLeft':   { surprised: 0.2, sad: 0.15 },
+      'browOuterUpRight':  { surprised: 0.2, sad: 0.15 },
+      'eyeWideLeft':       { surprised: 0.4, fearful: 0.3 },
+      'eyeWideRight':      { surprised: 0.4, fearful: 0.3 },
+      'eyeSquintLeft':     { happy: 0.3, angry: 0.15 },
+      'eyeSquintRight':    { happy: 0.3, angry: 0.15 },
+      'noseSneerLeft':     { disgusted: 0.5, angry: 0.15 },
+      'noseSneerRight':    { disgusted: 0.5, angry: 0.15 },
+      'jawForward':        { angry: 0.3 },
+      'jawOpen':           { surprised: 0.3, fearful: 0.2 },
+      'cheekSquintLeft':   { happy: 0.2 },
+      'cheekSquintRight':  { happy: 0.2 },
+    };
+
+    let faceLandmarker = null;
+    const logEl = document.getElementById('log');
+    const statusEl = document.getElementById('status');
+
+    function log(msg) {
+      logEl.textContent += msg + '\n';
+      logEl.scrollTop = logEl.scrollHeight;
+      console.log(msg);
+    }
+
+    window.initModel = async function() {
+      document.getElementById('btnInit').disabled = true;
+      statusEl.className = 'status loading';
+      statusEl.textContent = 'Loading MediaPipe...';
+
+      try {
+        const filesetResolver = await FilesetResolver.forVisionTasks(WASM_URL);
+        faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
+          baseOptions: { modelAssetPath: MODEL_URL, delegate: 'GPU' },
+          outputFaceBlendshapes: true,
+          runningMode: 'IMAGE',
+          numFaces: 1,
+        });
+        statusEl.className = 'status success';
+        statusEl.textContent = '✅ MediaPipe loaded! Click "Run Image Tests"';
+        document.getElementById('btnTest').disabled = false;
+        document.getElementById('btnCamera').disabled = false;
+        log('✅ MediaPipe FaceLandmarker initialized');
+      } catch (err) {
+        statusEl.className = 'status error';
+        statusEl.textContent = '❌ Failed: ' + err.message;
+        log('❌ Init failed: ' + err);
+      }
+    };
+
+    function classifyEmotion(blendshapes) {
+      const scores = { happy: 0, sad: 0, angry: 0, surprised: 0, fearful: 0, disgusted: 0, neutral: 0 };
+      const bsMap = new Map(blendshapes.map(b => [b.categoryName, b.score]));
+
+      for (const [name, weights] of Object.entries(WEIGHTS)) {
+        const val = bsMap.get(name) ?? 0;
+        if (val < 0.02) continue;
+        for (const [emo, w] of Object.entries(weights)) {
+          scores[emo] += val * w;
+        }
+      }
+
+      let dominant = 'neutral';
+      let maxScore = 0;
+      for (const [emo, s] of Object.entries(scores)) {
+        if (emo !== 'neutral' && s > maxScore) { maxScore = s; dominant = emo; }
+      }
+
+      if (maxScore < 0.08) {
+        scores.neutral = 1;
+        dominant = 'neutral';
+        maxScore = 1;
+      }
+
+      return { scores, dominant, confidence: maxScore };
+    }
+
+    function loadImage(url) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Failed to load: ' + url));
+        img.src = url;
+      });
+    }
+
+    window.runAllTests = async function() {
+      if (!faceLandmarker) return alert('Init first');
+      document.getElementById('btnTest').disabled = true;
+      const gallery = document.getElementById('gallery');
+      gallery.innerHTML = '';
+      log('\n=== Running Image Tests ===');
+
+      for (const test of TEST_IMAGES) {
+        log(`\n--- ${test.name} ---`);
+        statusEl.textContent = `Testing: ${test.name}...`;
+
+        try {
+          const img = await loadImage(test.url);
+          const results = faceLandmarker.detect(img);
+
+          if (!results.faceLandmarks || results.faceLandmarks.length === 0) {
+            log('  ❌ No face detected');
+            renderCard(gallery, test.name, test.url, test.expected, null, null);
+            continue;
+          }
+
+          const blendshapes = results.faceBlendshapes?.[0]?.categories ?? [];
+          log(`  Blendshapes count: ${blendshapes.length}`);
+
+          // Log top blendshapes
+          const top = [...blendshapes].sort((a, b) => b.score - a.score).slice(0, 10);
+          for (const bs of top) {
+            if (bs.score > 0.01) {
+              log(`  ${bs.categoryName}: ${bs.score.toFixed(4)}`);
+            }
+          }
+
+          const emotion = classifyEmotion(blendshapes);
+          log(`  → Result: ${emotion.dominant} (${(emotion.confidence * 100).toFixed(1)}%)`);
+          log(`  → Expected: ${test.expected}`);
+          log(`  → Match: ${emotion.dominant === test.expected ? '✅' : '❌'}`);
+
+          renderCard(gallery, test.name, test.url, test.expected, emotion, blendshapes);
+        } catch (err) {
+          log(`  ❌ Error: ${err.message}`);
+          renderCard(gallery, test.name, test.url, test.expected, null, null);
+        }
+      }
+
+      statusEl.className = 'status success';
+      statusEl.textContent = '✅ Tests complete! Check results below.';
+      document.getElementById('btnTest').disabled = false;
+    };
+
+    function renderCard(container, name, imgUrl, expected, emotion, blendshapes) {
+      const card = document.createElement('div');
+      card.className = 'card';
+
+      const match = emotion && emotion.dominant === expected;
+      const matchIcon = emotion ? (match ? '✅' : '❌') : '⚠️';
+
+      card.innerHTML = `
+        <img src="${imgUrl}" alt="${name}" onerror="this.style.display='none'">
+        <h3>${matchIcon} ${name}</h3>
+        <div class="result">
+          <div>Expected: <strong>${expected}</strong></div>
+          ${emotion ? `
+            <div>Got: <span class="dominant">${emotion.dominant}</span> (${(emotion.confidence * 100).toFixed(1)}%)</div>
+            <div style="margin-top:8px">
+              ${Object.entries(emotion.scores).sort(([,a],[,b]) => b-a).map(([e, s]) => `
+                <div>${e}: ${(s*100).toFixed(1)}% <span class="score-bar" style="width:${s*200}px"></span></div>
+              `).join('')}
+            </div>
+          ` : '<div style="color:#f66">No face detected</div>'}
+        </div>
+        ${blendshapes ? `
+          <details><summary style="cursor:pointer;color:#888;font-size:11px">Blendshapes (${blendshapes.length})</summary>
+            <div class="blendshapes">
+              ${[...blendshapes].sort((a,b) => b.score - a.score).slice(0, 20).map(b => `
+                <div class="row"><span>${b.categoryName}</span><span class="val">${b.score.toFixed(4)}</span></div>
+              `).join('')}
+            </div>
+          </details>
+        ` : ''}
+      `;
+      container.appendChild(card);
+    }
+
+    window.testCamera = async function() {
+      if (!faceLandmarker) return alert('Init first');
+      log('\n=== Camera Test ===');
+
+      const video = document.createElement('video');
+      video.autoplay = true;
+      video.playsInline = true;
+      video.style.width = '400px';
+      video.style.borderRadius = '8px';
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+        video.srcObject = stream;
+        document.body.appendChild(video);
+
+        await new Promise(r => video.onloadeddata = r);
+        log('Camera started, detecting...');
+
+        let count = 0;
+        const interval = setInterval(() => {
+          const results = faceLandmarker.detectForVideo(video, performance.now());
+          count++;
+
+          if (results.faceLandmarks?.length > 0) {
+            const blendshapes = results.faceBlendshapes?.[0]?.categories ?? [];
+            const emotion = classifyEmotion(blendshapes);
+
+            if (count % 10 === 0) {
+              log(`[${count}] ${emotion.dominant} (${(emotion.confidence*100).toFixed(1)}%)`);
+              // Show top 5 blendshapes
+              const top = [...blendshapes].sort((a,b) => b.score - a.score).slice(0, 5);
+              for (const b of top) {
+                if (b.score > 0.01) log(`  ${b.categoryName}: ${b.score.toFixed(3)}`);
+              }
+            }
+          } else {
+            if (count % 30 === 0) log(`[${count}] No face detected`);
+          }
+        }, 100);
+
+        // Stop after 30s
+        setTimeout(() => {
+          clearInterval(interval);
+          stream.getTracks().forEach(t => t.stop());
+          video.remove();
+          log('Camera test ended');
+        }, 30000);
+
+      } catch (err) {
+        log('Camera error: ' + err.message);
+      }
+    };
+  </script>
+</body>
+</html>
