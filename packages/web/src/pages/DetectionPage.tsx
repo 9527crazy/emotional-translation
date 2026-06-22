@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { EMOTION_LABELS, EMOTION_COLORS, percent } from '@emotional-translation/shared';
 import { translationService } from '../services/translation.service';
+import EmotionDebug from '../components/emotion/EmotionDebug';
 
 export default function DetectionPage() {
   const navigate = useNavigate();
@@ -100,10 +101,13 @@ export default function DetectionPage() {
                 <span className="text-xs">{EMOTION_LABELS[e].zh}</span>
               </button>
             ))}
-          </div>
+          <EmotionDebug />
+    </div>
           <Button variant="ghost" onClick={() => setManualMode(false)}>返回摄像头</Button>
-        </div>
-      </div>
+        <EmotionDebug />
+    </div>
+      <EmotionDebug />
+    </div>
     );
   }
 
@@ -117,13 +121,15 @@ export default function DetectionPage() {
           <video ref={videoRef} className="camera-mirror w-full h-full object-cover" autoPlay playsInline muted />
           {isDetecting && smoothed && <FaceOverlay width={640} height={480} />}
           {isDetecting && <div className="absolute top-3 right-3"><EmotionRing size={80} /></div>}
-        </div>
+        <EmotionDebug />
+    </div>
 
         {/* Permission overlay — shown when not streaming */}
         {!isStreaming && (
           <div className="flex-1">
             <CameraPermission error={error} onRequestPermission={handleStart} onManualSelect={handleManualSelect} />
-          </div>
+          <EmotionDebug />
+    </div>
         )}
 
         {/* Controls + sidebar — shown when streaming */}
@@ -140,17 +146,23 @@ export default function DetectionPage() {
               <Button variant="ghost" size="sm" onClick={handleManualSelect}><Hand className="w-4 h-4 mr-1.5" />手动</Button>
               <div className="flex-1" />
               <Button variant="ghost" size="sm" onClick={handleScreenshot} disabled={!smoothed}><Download className="w-4 h-4 mr-1.5" />保存卡片</Button>
-            </div>
+            <EmotionDebug />
+    </div>
             {/* Right: Dashboard + Translation */}
             <div className="flex flex-col w-full lg:w-80 xl:w-96 border-l border-gray-100 dark:border-gray-800 min-h-0 flex-shrink-0">
               <div className="flex-shrink-0 max-h-72 overflow-y-auto border-b border-gray-100 dark:border-gray-800">
                 <EmotionDashboard />
-              </div>
-              <div className="flex-1 min-h-0 p-3 overflow-hidden"><TranslationPanel /></div>
-            </div>
+              <EmotionDebug />
+    </div>
+              <div className="flex-1 min-h-0 p-3 overflow-hidden"><TranslationPanel /><EmotionDebug />
+    </div>
+            <EmotionDebug />
+    </div>
           </>
         )}
-      </div>
+      <EmotionDebug />
+    </div>
+    <EmotionDebug />
     </div>
   );
 }
@@ -162,7 +174,8 @@ function Header({ navigate }: { navigate: (path: string) => void }) {
       <div className="flex gap-1">
         <Button variant="ghost" size="sm" onClick={() => navigate('/timeline')}><Clock className="w-4 h-4" /></Button>
         <Button variant="ghost" size="sm" onClick={() => navigate('/settings')}><Settings className="w-4 h-4" /></Button>
-      </div>
+      <EmotionDebug />
+    </div>
     </header>
   );
 }
