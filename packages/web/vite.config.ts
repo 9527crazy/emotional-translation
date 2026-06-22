@@ -11,8 +11,9 @@ export default defineConfig({
     },
   },
   server: {
-    port: 4371,
-    open: true,
+    port: 5173,
+    host: '0.0.0.0',
+    open: false,
   },
   build: {
     outDir: 'dist',
