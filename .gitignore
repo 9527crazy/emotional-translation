@@ -31,9 +31,10 @@ pnpm-debug.log*
 # Testing
 coverage/
 
-# Models (large files, download separately)
-packages/web/public/models/*.task
-packages/web/public/models/emotion_mobilenet/*.bin
+# Models (large files)
+*.task
+*.tflite
+*.bin
 
 # Cache
 .vite/

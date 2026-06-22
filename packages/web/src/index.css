@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand: #6C63FF;
+  --brand-light: #8B85FF;
+  --brand-dark: #4F46E5;
+  --accent: #FF6B9D;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Smooth color transitions for emotion changes */
+.emotion-transition {
+  transition: background-color 500ms ease-in-out, color 300ms ease-out;
+}
+
+/* Camera video mirror */
+.camera-mirror {
+  transform: scaleX(-1);
+}
